@@ -1,0 +1,12 @@
+    if(VREP_FOUND)
+        add_definitions(-DVREP)
+    elseif(COPPELIASIM_FOUND)
+        add_definitions(-DCOPPELIASIM)
+    endif()
+
+    if(WITH_NN2)
+        add_subdirectory(mnipes)
+        add_subdirectory(nipes)
+        add_subdirectory(physical_melai)
+    endif()
+    install(DIRECTORY common DESTINATION include FILES_MATCHING PATTERN "*.hpp" PATTERN "*.h" )

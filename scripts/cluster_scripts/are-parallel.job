@@ -1,0 +1,26 @@
+#!/bin/bash
+#SBATCH -N 1
+#SBATCH --time=0-4:00:00
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=32
+#SBATCH --exclude=node[1-6]
+
+# Append job id to 'preTextInResultFile'
+original_line=`cat /share/earza/evolutionary_robotics_framework/experiments/$1/parameters.csv | grep "preTextInResultFile" `
+original_param=`python3 -c "a='$original_line';b=a.split(',')[-1];print(b)"`
+python3 scripts/utils/UpdateParameter.py -f /share/earza/evolutionary_robotics_framework/experiments/$1/parameters.csv -n preTextInResultFile -v ${original_param}_job_${SLURM_JOB_ID}
+
+SIMULATOR=$4
+
+if [[ "$SIMULATOR" == "vrep" ]]; then
+    python3 /share/earza/evolutionary_robotics_framework/simulation/Cluster/run_cluster.py --xvfb 1 --params /share/earza/evolutionary_robotics_framework/experiments/$1/parameters.csv --client /share/earza/library/bin/are-client --vrep /share/earza/V-REP_PRO_EDU_V3_6_2_Ubuntu18_04/are_sim.sh --port-start $2 $3
+elif [[ "$SIMULATOR" == "coppelia" ]]; then
+    python3 /share/earza/evolutionary_robotics_framework/simulation/Cluster/run_cluster.py --xvfb 1 --params /share/earza/evolutionary_robotics_framework/experiments/$1/parameters.csv --client /share/earza/library/bin/are-client --vrep /share/earza/CoppeliaSim_Edu_V4_3_0_Ubuntu18_04/are_sim.sh --port-start $2 $3
+else
+    echo "ERROR: SIMULATOR must be either vrep or coppelia. SIMULATOR=$SIMULATOR was given."
+fi
+
+sleep 2
+rm -r /share/earza/evolutionary_robotics_framework/experiments/$1
+
