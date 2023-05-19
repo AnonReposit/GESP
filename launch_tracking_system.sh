@@ -1,0 +1,2 @@
+export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/snap/bin
+python3 evolutionary_robotics_framework/image_processing/Tracking_system/tracking_system.py

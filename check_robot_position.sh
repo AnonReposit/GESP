@@ -1,0 +1,1 @@
+./evolutionary_robotics_framework/build/image_processing/test_camera_subscriber tcp://127.0.0.1:5557 100000
