@@ -111,5 +111,4 @@ tmp.txt
 
 
 *.pdf
-results/data/tgrace_different_values/*.txt
-results/data/tgrace_experiment/*.txt
+
