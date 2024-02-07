@@ -15,7 +15,7 @@ port = int(10e4)
 
 # The execution stops when no movement only for M-nipes. This is likely because some morphologies do not even  move, while there 
 # is almost always a small movement in NIPES if a morphology that can move is trained.
-savefig_paths = ["results/figures/are_project"]
+savefig_paths = ["results/figures/are_project", "../paper/images/are_project/"]
 
 # time[0] + maxEvalTime * time[1]
 sim_time_coefs = [1.43, 0.06, "simulation"]
@@ -441,6 +441,9 @@ for index, task, scene in zip(range(n_tasks), task_list, scene_list):
         x_max = x_max/3600
 
         plt.figure(figsize=(4, 3))
+
+        best_f = df_all["fitness"].max()
+        plt.plot((0, x_max), (best_f, best_f), color="gray", linestyle="--", label="best-found")
         plt.xlim((0, x_max))
         for x, y_median, y_lower, y_upper, every_y_halve, method, method_name, color, marker in zip(x_list, y_median_list, y_lower_list, y_upper_list, every_y_halve_list, method_list, method_plot_name_list, ["tab:blue", "tab:orange", "tab:green"], ["o","x",","]):
             plt.plot(x, y_median, label=f"{method_name}", color=color, marker=marker, markevery=(0.2, 0.4))
@@ -479,12 +482,19 @@ for index, task, scene in zip(range(n_tasks), task_list, scene_list):
                 fig, ax = plt.subplots(figsize=(4, 3))
 
                 for j, task in enumerate(task_list_plot_times):
-
+                    plot_labels_legend={
+                        "ExploreObstacles":"Obstacles",  
+                        "ExploreHardRace":"Hard race",
+                        "MazeEasyRace":"Maze easy race", 
+                        "MazeMultiMaze":"Maze multi maze", 
+                        "MazeMiddleWall":"Maze middle wall", 
+                        "MazeScapeRoom":"Maze scape room"
+                    }
                     quantiles, y = pe.get_proportion(task, "constant", "bestasref") 
-                    ax.plot(quantiles, y, label=task, color=color_list[j], marker=marker_list[j], linestyle=linestyle_list[j])
+                    ax.plot(quantiles, y, label=plot_labels_legend[task], color=color_list[j], marker=marker_list[j], linestyle=linestyle_list[j])
                     
                 fig.legend(loc='center')
-                ax.set_xlabel(r"Optimization time with respect to $t_{max}$")
+                ax.set_xlabel(r"normalized optimization runtime budget")
                 ax.set_ylabel("Proportion of solutions evaluated")
                 ax.set_ylim((1.0, ax.get_ylim()[1]))
                 plt.tight_layout()

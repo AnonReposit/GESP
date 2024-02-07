@@ -267,7 +267,11 @@ class run2D():
 		# create population when none is given as an argument
 		if population is None:
 			population = toolbox.population(n=self.POPULATION_SIZE)
-			fitnesses = toolbox.map(toolbox.evaluate, population) # list(toolbox.evaluate,population))
+
+			if parallel:
+				fitnesses = toolbox.map(toolbox.evaluate, population) # list(toolbox.evaluate,population))
+			else:
+				fitnesses = [evaluate(individual, TestMode=False, global_vars=global_vars, HEADLESS = self.headless, TREE_DEPTH = self.TREE_DEPTH) for individual in population]
 			for ind, fit in zip(population, fitnesses):
 				ind.fitness = fit
 		

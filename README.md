@@ -24,7 +24,7 @@ where $t_{grace}$ is set to a fraction of the maximum episode length $t_{max}$. 
 
 ### Installation
 
-Clone the repo and check the instructions to install in the folders inside `other_RL/`. This step can be omitted for generating the plots, but it is necessary to perform this step to launch the experiments. You also need to install the python dependencies specified in `requirements.txt`.
+Clone the repo and check the instructions to install in the folders inside `other_RL/`. This step can be omitted for generating the plots, but it is necessary to perform this step to launch the experiments. You also need to install the python dependencies specified in `requirements.txt`. The `simulatedARE` experiment has additional dependencies (see `install_script_gecco21_leni_ARE.sh`).
 
 ### Usage
 
@@ -35,14 +35,24 @@ The experiments can be executed with the following four scripts:
 - `scripts/experiment_veenstra.py`
 
 An extra parameter is required. 
-- `--launch_local` to execute the experiments
-- `--plot` to generate the figures in the paper from the results in `/results/data`. 
+- `--launch_local` to execute the experiments where GESP is compared to problem specific approaches or to using no early stopping. Generates the data for all the experimental result figures up to and including Figure 12.
+- `--tgrace_different_values` to execute the experiments that compare different `t_grace` parameter values. Generates the data for Figure 13 in the paper.
+- `--tgrace_nokill` to execute the experiments that estimate the success rate for different `t_grace` parameter values. Generates the data for Figure 14 in the paper.
+- `--plot` to generate the figures in the paper up to Figure 12, from the results in `/results/data`. 
 
 e.g. to generate the plots in the garage framework, 
 
 ```
 python scripts/experiment_garage_CMAES_gym.py --plot
 ```
+
+
+To generate Figure 13 and Figure 14 (the figures of the `t_grace` experiments) for all of the environments, use
+
+```
+python scripts/utils/src_tgrace_experiment.py
+```
+
 
 
 ### Credits

@@ -1,5 +1,7 @@
 import neat
 import pickle
+import sys
+sys.path.append("other_RL/gym-super-mario-master")
 import gym, ppaquette_gym_super_mario
 import visualize
 import gzip

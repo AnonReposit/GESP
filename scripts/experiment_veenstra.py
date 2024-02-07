@@ -21,7 +21,7 @@ seeds = list(range(2,32))
 parallel_threads = 7
 gracetime = 130 # this is the runtime that the problem specific method allows for controllers in the first generation.
 
-savefig_paths = ["results/figures"]
+savefig_paths = ["results/figures", "../paper/images"]
 
 method_list = ["nokill", "bestasref", "problemspecific"]
 method_plot_name_list = ["Standard", "GESP", "Problem Specific"]
@@ -30,8 +30,8 @@ method_plot_name_list = ["Standard", "GESP", "Problem Specific"]
 if len(sys.argv) != 2:
     raise ArgumentError("this script requires only one argument --plot --launch_local")
 
-if sys.argv[1] not in ("--plot", "--launch_local"):
-    raise ArgumentError("this script requires only one argument --plot --launch_local")
+if sys.argv[1] not in ("--plot", "--launch_local", "--tgrace_nokill", "--tgrace_different_values"):
+    raise ArgumentError("This script requires only one argument: --plot --launch_local --tgrace_nokill or --tgrace_different_values")
 
 
 #region local_launch
@@ -60,6 +60,52 @@ if sys.argv[1] == "--launch_local":
 
 
 
+
+#region local_launch
+if sys.argv[1] == "--tgrace_different_values":
+    import time
+
+    paramlist = [(seed, tgrace) for tgrace in [0.0, 0.05, 0.2, 0.5, 1.0] for seed in seeds]
+    t_max_episode_length = 4800
+
+    def run_with_seed(idx):
+        seed, tgrace = paramlist[idx]
+        real_tgrace = max(1,round(t_max_episode_length * tgrace))
+        time.sleep(0.1*seed)
+        print(f"Launching with seed {seed} in tgrace_different_values experiment ...")
+        res_filepath = os.getcwd() + "/" + f"results/data/tgrace_different_values/veenstra_{tgrace}_{seed}.txt"
+        bash_cmd = f"python3 other_RL/gym_rem2D/ModularER_2D/Demo2_Evolutionary_Run.py --method bestasref --seed {seed} --gracetime {real_tgrace} --res_filepath {res_filepath}"
+        print(bash_cmd)
+        exec_res=subprocess.run(bash_cmd,shell=True, capture_output=True)
+
+    #     run_with_seed_and_runtime(seed, "halving")
+    Parallel(n_jobs=parallel_threads, verbose=12)(delayed(run_with_seed)(idx) for idx in range(len(paramlist)))
+#endregion
+
+
+
+#region local_launch
+
+if sys.argv[1] == "--tgrace_nokill":
+    import itertools
+    import time
+
+
+    def run_with_seed(seed):
+
+        time.sleep(0.5)
+        res_filepath = os.getcwd() + "/" + f"results/data/tgrace_experiment/veenstra_{seed}.txt"
+        with open("tmp.txt", "a") as f:
+            print(res_filepath,file=f)
+        bash_cmd = f"python3 other_RL/gym_rem2D/ModularER_2D/Demo2_Evolutionary_Run.py --method nokill_tgrace_exp --seed {seed} --gracetime {gracetime} --res_filepath {res_filepath}"
+        print(bash_cmd)
+        exec_res=subprocess.run(bash_cmd,shell=True, capture_output=True)
+        
+    #     run_with_seed_and_runtime(seed, "halving")
+    Parallel(n_jobs=parallel_threads, verbose=12)(delayed(run_with_seed)(i) for i in seeds)
+
+
+#endregion
 
 
 
@@ -235,7 +281,7 @@ if sys.argv[1] == "--plot":
 
         
 
-        plt.figure(figsize=(4,3))
+        plt.figure(figsize=(4,3*1.35) if score_type=="fitness" else (4,3))
         plt.xlim((0, x_max / 3600))
         for x, y_median, y_lower, y_upper, every_y_halve, method, method_name, color, marker in zip(x_list, y_median_list, y_lower_list, y_upper_list, every_y_halve_list, method_list, method_plot_name_list, ["tab:blue", "tab:orange", "tab:green"], ["o","x",","]):
             plt.plot(np.array(x) / 3600, y_median, label=f"{method_name}", color=color, marker=marker, markevery=(0.2, 0.4))
@@ -245,7 +291,10 @@ if sys.argv[1] == "--plot":
         plt.minorticks_on()
         plt.xlabel("Optimization time in hours")
         plt.ylabel("Objective value")
-        plt.legend()
+        best_f = df_all["fitness"].max()
+        plt.plot((0, x_max), (best_f, best_f), color="black", linestyle="--", label="best-found")
+        if score_type=="fitness":
+            plt.legend(loc='upper center', bbox_to_anchor=(0.5, 1.3), ncol=2)
         plt.tight_layout()
         for path in savefig_paths:
             plt.savefig(path + f"veenstra_results_{score_type}.pdf")
@@ -267,13 +316,14 @@ if sys.argv[1] == "--plot":
                 quantiles, y = pe.get_proportion("dummytaskname", method_list[0], method) 
                 ax.plot(quantiles, y, label=label_text[j], color=color_list[j+1], marker=marker_list[j+1], linestyle=linestyle_list[j+1])
 
-            fig.legend()
-            ax.set_xlabel(r"Optimization time with respect to $t_{max}$")
+            ax.set_xlabel(r"normalized optimization runtime budget")
             ax.set_ylabel("Proportion of solutions evaluated")
             ax.set_ylim((1.0, ax.get_ylim()[1]))
             ax.set_yscale("log")
             ax.set_yticks([1, 2, 5, 10, 20, 50, 100])
             ax.grid(axis='y', color='0.95')
+            ax.legend(loc='upper center', bbox_to_anchor=(0.5, 1.3), ncol=2)
+
             fig.tight_layout()
             for path in savefig_paths:
                 fig.savefig(path + f"/evals_proportion_VEENSTRA.pdf")

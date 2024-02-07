@@ -13,6 +13,15 @@ from garage._functions import *
 import time
 import argparse
 import sys
+import numpy as np
+import os
+
+sys.path.append(os.path.abspath('scripts/utils'))
+sys.path.append(os.path.abspath('scripts'))
+from progress_tracker import experimentProgressTracker
+import src_tgrace_experiment
+
+
 
 TOTAL_COMPUTED_STEPS = 0 # number of episodes (1 episode is equal to a complete begining -> [environment-> action -> reward] -> end cycle)
 RUNTIMES = []
@@ -29,11 +38,13 @@ parser.add_argument('--gracetime', required=True, metavar='gracetime', type=int,
 parser.add_argument('--gens', required=True, metavar='gens', type=int, help='NUmber of generations or epochs', default=None, nargs='?')
 parser.add_argument('--max_episode_length', required=True, metavar='max_episode_length', type=int, help='Number of max frames per experiment', default=None, nargs='?')
 parser.add_argument('--res_filepath', required=True, metavar='res_filepath', type=str, help='Result file path', default=None, nargs='?')
+parser.add_argument('--max_optimization_time', required=False, metavar='max_optimization_time', type = float, help="total optimization budget in seconds", default=None, nargs='?')
 
 args = parser.parse_args()
 
+method = args.method
 
-modifyRuntime_method = int(["constant", "bestasref", "bestevery"].index(args.method)) 
+assert method in ("constant", "bestasref", "tgraceexp", "tgraceexpdifferentvals")
 gymEnvName = args.gymEnvName
 
 DTU = False
@@ -46,6 +57,16 @@ GRACE = args.gracetime
 n_epochs = args.gens
 MAX_EPISODE_LENGTH = args.max_episode_length
 res_filepath = args.res_filepath
+
+MAX_OPTIMIZATION_TIME_TGRACE_EXP = args.max_optimization_time / 4
+
+if method == "tgraceexp":
+    tgraceexp = src_tgrace_experiment.TgraceNokillLogger(res_filepath, MAX_OPTIMIZATION_TIME_TGRACE_EXP, True, 1)
+    res_filepath = "/dev/null"
+if method == "tgraceexpdifferentvals":
+    tgraceexpdifferentvals = src_tgrace_experiment.TgraceDifferentValuesLogger(res_filepath, MAX_OPTIMIZATION_TIME_TGRACE_EXP, True)
+    res_filepath = "/dev/null"
+
 
 REF_CUMULATIVE_FITNESSES = np.array([-1e20] * MAX_EPISODE_LENGTH)
 batch_size = 1
@@ -85,19 +106,36 @@ def rollout(self):
         step_reward = self._env_steps[i-1].reward
         sum_of_rewards = sum_of_rewards + step_reward
         observed_cum_rewards[i] = sum_of_rewards
+
+
         # Halt computation cumulative reward is worse than ref
-        if modifyRuntime_method == 1: # bestasref
+        if method in ("bestasref","tgraceexpdifferentvals"):
             if i >= GRACE and not (   max(observed_cum_rewards[i - GRACE], observed_cum_rewards[i]) >=  min(REF_CUMULATIVE_FITNESSES[i - GRACE], REF_CUMULATIVE_FITNESSES[i])  ):
                 print("Stop computation after", i," steps: ref , sum of returns =  ", REF_CUMULATIVE_FITNESSES[i - GRACE], sum_of_rewards)
                 was_early_stopped = True
                 self._max_episode_length = self._eps_length
-        elif modifyRuntime_method == 2: # bestevery
-            raise ValueError("This was scraped, because the besrasref method takes into account decreasing objective funcions too!")
-                
+    
     self._max_episode_length = MAX_EPISODE_LENGTH       
+
+    TOTAL_COMPUTED_STEPS += i
 
 
     print("f =",sum_of_rewards)
+
+    if method == "tgraceexp":
+        assert not was_early_stopped, "tgraceexp_nokill experiment requires that early stopping is not applied."
+        tgraceexp.log_values(observed_cum_rewards[:i])
+        if tgraceexp.toc() > MAX_OPTIMIZATION_TIME_TGRACE_EXP:
+            exit(0)
+
+    if method == "tgraceexpdifferentvals":
+        assert tgraceexpdifferentvals.max_optimization_time == MAX_OPTIMIZATION_TIME_TGRACE_EXP
+        if tgraceexpdifferentvals.toc() > MAX_OPTIMIZATION_TIME_TGRACE_EXP:
+            tgraceexpdifferentvals.log_values(-1e10, TOTAL_COMPUTED_STEPS)
+            exit(0)
+        if not was_early_stopped:
+            tgraceexpdifferentvals.log_values(sum_of_rewards, TOTAL_COMPUTED_STEPS)
+
 
     # Updating ref fitness.
     if not was_early_stopped and sum_of_rewards > REF_CUMULATIVE_FITNESSES[-1]:
@@ -108,7 +146,6 @@ def rollout(self):
         print("New refs:", REF_CUMULATIVE_FITNESSES)
         print("--")
 
-    TOTAL_COMPUTED_STEPS += i
 
     RUNTIMES.append(time.time() - episode_start_ref_t)
 
@@ -125,9 +162,8 @@ def rollout(self):
 # mock rollout function to introduce early stopping
 garage.sampler.default_worker.DefaultWorker.rollout = rollout
 
-@wrap_experiment(snapshot_mode="none", log_dir="/tmp/")
+@wrap_experiment(snapshot_mode="none", log_dir="/tmp/", archive_launch_repo=False)
 def launch_experiment(ctxt=None, gymEnvName=gymEnvName, seed=seed):
-    
     import garage.trainer
     # mock save function to avoid wasting time
     garage.trainer.Trainer.save = lambda self, epoch: print("skipp save.")

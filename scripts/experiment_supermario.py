@@ -23,11 +23,12 @@ gracetime = 40
 fincrementsize = 150
 parallel_threads = 8
 
-savefig_paths = ["results/figures"]
+savefig_paths = ["results/figures", "../paper/images/supermario/"]
 
 methods = ["nokill", "bestasref", "constant"]
 method_plot_name_list = ["Standard", "GESP", "Problem Specific"]
 task_list = ["1-4", "2-1", "4-1", "4-2", "5-1", "6-2", "6-4"]
+apply_legend_to_first_plot = True 
 
 if sys.argv[1] == "--plot":
 
@@ -82,8 +83,8 @@ for task in tqdm(task_list):
     if len(sys.argv) != 2:
         raise ArgumentError("this script requires only one argument --plot --launch_local")
 
-    if sys.argv[1] not in ("--plot", "--launch_local"):
-        raise ArgumentError("this script requires only one argument --plot --launch_local")
+    if sys.argv[1] not in ("--plot", "--launch_local", "--tgrace_nokill", "--tgrace_different_values"):
+        raise ArgumentError("this script requires only one argument --plot --launch_local --tgrace_nokill --tgrace_different_values")
 
 
     #region local_launch
@@ -103,8 +104,18 @@ for task in tqdm(task_list):
 
             # # Reduce evaluations not needed in nokill if we kill all experiments in 1k iterations.
             #new_gens = str(gens if method != "nokill" else gens // 6)
-            print(f"python3 other_RL/super-mario-neat/src/main.py train --gen {gens} --task {task} --seed {seed} --method {method} --resultfilename results/data/super_mario/task_{task}_{method}_{seed}.txt --gracetime {gracetime}")
-            exec_res=subprocess.run(f"python3 other_RL/super-mario-neat/src/main.py train --gen {gens} --task {task} --seed {seed} --method {method} --resultfilename results/data/super_mario/task_{task}_{method}_{seed}.txt --gracetime {gracetime}",shell=True, capture_output=True)
+            resultfilename = f"results/data/super_mario/supermario{task}_{seed}.txt"
+            cmd_str = f"python3 other_RL/super-mario-neat/src/main.py train --gen 10000 --task {task} --seed {seed} --method {method} --resultfilename {resultfilename} --gracetime {gracetime}"
+            import os
+            try:
+                os.remove(resultfilename)
+                print(f"removed old log {resultfilename}")
+            except FileExistsError:
+                pass
+            except FileNotFoundError:
+                pass
+            cmd_str = f"python3 other_RL/super-mario-neat/src/main.py train --gen 10000 --task {task} --seed {seed} --method {method} --resultfilename {resultfilename} --gracetime {gracetime}"
+            exec_res=subprocess.run(cmd_str,shell=True, capture_output=True)
         
         Parallel(n_jobs=parallel_threads, verbose=12)(delayed(run_with_experiment_index)(i) for i in range(len(experiment_parameters)))
         print("Finished trainig controllers. Now we measure the runtime of the best solutions in each case.")
@@ -119,7 +130,82 @@ for task in tqdm(task_list):
                         print(task, method, seed, res, frames, sep=",", file=f)
         exit(0)
 
-        
+
+
+
+    #region local_launch
+    if sys.argv[1] == "--tgrace_different_values":
+        import itertools
+        import time
+
+        seeds = list(range(2,32))
+        max_optimization_time = 1400.0
+
+        method = "tgraceexpdifferentvals"
+        task_list = ["5-1","6-2","6-4"]
+        t_max_episode_length = 1000
+        experiment_parameters = [(seed, tgrace, task) for task in task_list for tgrace in [0.0, 0.05, 0.2, 0.5, 1.0] for seed in seeds]
+
+        from progress_tracker import experimentProgressTracker
+        tracker = experimentProgressTracker("supermario_tgraceexpdifferentvals", 0, len(experiment_parameters), min_exp_time=max_optimization_time*0.95)
+
+
+        def run_with_experiment_index():
+            idx = tracker.get_next_index()
+            seed, tgrace, task = experiment_parameters[idx]
+            real_tgrace = max(1,round(t_max_episode_length * tgrace))
+            print(seed, tgrace, task)
+            
+            # Kill all old fceux processes
+            subprocess.run("ps -eo pid,lstart,comm | grep fceux | sort -k 4,4 -k 5,5M -k 6,6n -k 7,7n | head -n -8 | awk '{print $1}' | xargs kill -9", shell=True, capture_output=False)
+            time.sleep(0.5)
+            print(f"Launching {task} with tgrace {tgrace} seed {seed} in supermario tgrace exp ...")
+            res_filepath = f"results/data/tgrace_different_values/supermario{task}_{tgrace}_{seed}.txt"
+            cmd = f"exec python3 other_RL/super-mario-neat/src/main.py train --gen 10000 --task {task} --seed {seed} --method {method} --resultfilename {res_filepath} --gracetime {real_tgrace} --experiment_index_for_log {idx} --max_optimization_time {max_optimization_time}"
+            print(cmd)
+            try:
+                subprocess.run(cmd,shell=True, capture_output=False, timeout=max_optimization_time*1.2)
+            except subprocess.TimeoutExpired:
+                print("Break: subprocess timeout.")
+                pass
+
+        Parallel(n_jobs=parallel_threads, verbose=12)(delayed(run_with_experiment_index)() for _ in range(len(experiment_parameters)))
+        exit(0)
+
+    #endregion
+
+
+    if sys.argv[1] == "--tgrace_nokill":
+        import itertools
+        import time
+
+        seeds = list(range(2,32))
+        max_optimization_time = 1400.0
+
+        methods = ["tgraceexp"]
+        task_list = ["5-1", "6-2", "6-4"]
+        experiment_parameters = list(itertools.product(seeds, methods, task_list))
+
+
+        from progress_tracker import experimentProgressTracker
+        tracker = experimentProgressTracker("supermario_tgraceexpnokill", 0, len(experiment_parameters), min_exp_time=20.0)
+        def run_with_experiment_index():
+            idx = tracker.get_next_index()
+            seed, method, task = experiment_parameters[idx]
+            print(seed, method, task)
+
+            # Kill all old fceux processes
+            subprocess.run("ps -eo pid,lstart,comm | grep fceux | sort -k 4,4 -k 5,5M -k 6,6n -k 7,7n | head -n -8 | awk '{print $1}' | xargs kill -9", shell=True, capture_output=False)
+            time.sleep(0.5)
+            print(f"Launching {task} with seed {seed} in supermario tgrace exp ...")
+            print(f"python3 other_RL/super-mario-neat/src/main.py train --gen {gens} --task {task} --seed {seed} --method {method} --resultfilename results/data/tgrace_experiment/supermario{task}_{seed}.txt --gracetime {gracetime} --experiment_index_for_log {idx}")
+            subprocess.run(f"python3 other_RL/super-mario-neat/src/main.py train --gen {gens} --task {task} --seed {seed} --method {method} --resultfilename results/data/tgrace_experiment/supermario{task}_{seed}.txt --gracetime {gracetime} --experiment_index_for_log {idx} --max_optimization_time {max_optimization_time}",shell=True, capture_output=False)
+
+        Parallel(n_jobs=parallel_threads, verbose=12)(delayed(run_with_experiment_index)() for _ in range(len(experiment_parameters)))
+        exit(0)
+
+
+
     #endregion
 
 
@@ -138,7 +224,6 @@ for task in tqdm(task_list):
 
         savefig_paths = ["results/figures/super_mario/", "/home/paran/Dropbox/BCAM/07_estancia_1/paper/images/super_mario/"]
 
-        
         df_row_list = []
 #        for fincrementsize in ("", "fincrementsize"):
         for fincrementsize in [""]:
@@ -205,7 +290,6 @@ for task in tqdm(task_list):
         x_max = 50000.0
         x_nsteps = 200
 
-
         for fincrementsize in [""]:
 
             x_list = []
@@ -247,7 +331,7 @@ for task in tqdm(task_list):
             x_max = x_max/3600
             plt.figure(figsize=(4, 3))
             for x, y_median, y_lower, y_upper, every_y_halve, method, method_name, color, marker in zip(x_list, y_median_list, y_lower_list, y_upper_list, every_y_halve_list, methods, method_plot_name_list, ["tab:blue", "tab:orange", "tab:green"], ["o","x",","] ):
-                plt.plot(x, y_median, label=f"{method_name}", color=color, marker=marker, markevery=(0.2, 0.4))
+                plt.plot(x, y_median, label=f"{method_name}" if apply_legend_to_first_plot else None, color=color, marker=marker, markevery=(0.2, 0.4))
                 plt.fill_between(x, y_lower, y_upper, color=color, alpha=.25)
                 if len(x) != 0:
                     x_max = min(x_max, max(x))
@@ -255,14 +339,26 @@ for task in tqdm(task_list):
                     print(x)
                 # plt.plot(np.array(x_halve)[test_results_true], np.repeat(y_min, len(test_results_true)), linestyle="None", marker = "_", color="black", label="$p < 0.05$")
                 # plt.scatter(df_halve_maxevaltime["rw_time"], df_halve_maxevaltime["fitness"], marker="o", label = "halve runtime", alpha=0.5, color="red")
+
+            best_f = df_all["fitness"].max()
+            plt.plot((0, x_max), (best_f, best_f), color="gray", linestyle="--", label="best-found")
             plt.xlim((0, x_max))
-            plt.legend()
+
+            plt.annotate(f'Level: {task}', (0.05, 0.85), xycoords='axes fraction')  # Add level to each plot
+
+            if apply_legend_to_first_plot:
+                plt.legend()
+                apply_legend_to_first_plot = False
+
             plt.minorticks_on()
             plt.xlabel("Optimization time in hours")
             plt.ylabel("Objective value")
-            plt.tight_layout()
+
+            plt.subplots_adjust(top=0.96, bottom=0.02)
+            plt.tight_layout(pad=0.0)
+
             for path in savefig_paths:
-                plt.savefig(path + f"/task_{task}_{fincrementsize}_exp_line.pdf")
+                plt.savefig(path + f"/task_{task}_{fincrementsize}_exp_line.pdf", bbox_inches='tight')
             plt.close()
 
         # Plot runtimes
@@ -279,10 +375,10 @@ for task in tqdm(task_list):
         plt.close()
 
 
-        if index == len(task_list)-1:
+        def generate_evaluation_ratio_plot():
             print("Generating evaluations/time plots")
 
-            fig, ax = plt.subplots(figsize=(4, 3))
+            fig, ax = plt.subplots(figsize=(6, 3))
             linestyle_list=['-','-','-','-','-', '-','-',':',':']
             marker_list=   ['x','h','d','^',',', '.',"*",',', '.']
             color_list=['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b','#008b8b','#9467bd','#8c564b','#e377c2','#7f7f7f','#bcbd22','#17becf']
@@ -291,15 +387,19 @@ for task in tqdm(task_list):
                 quantiles, y = pe.get_proportion(task, "nokill", "bestasref") 
                 ax.plot(quantiles, y, label=task, color=color_list[j], marker=marker_list[j], linestyle=linestyle_list[j])
 
-
-            fig.legend()
-            ax.set_xlabel(r"Optimization time with respect to $t_{max}$")
+            ax.set_xlabel(r"Normalized optimization runtime budget")
             ax.set_ylabel("Proportion of solutions evaluated")
             ax.set_ylim((1.0, ax.get_ylim()[1]))
+            # Create a legend and place it to the right of the plot
+            ax.legend(loc='center left', bbox_to_anchor=(1.02, 0.5))
+            # Adjust layout
             fig.tight_layout()
             for path in savefig_paths:
                 fig.savefig(path + f"/evals_proportion_supermario.pdf")
 
+
+        if index == len(task_list)-1:
+            generate_evaluation_ratio_plot()
 
     #endregion
 

@@ -12,11 +12,14 @@ parser.add_argument('--file', metavar='file_name', type=str, help='File name to 
 parser.add_argument('--config', metavar='config', type=str, help='Configuration File', default='config', nargs='?')
 parser.add_argument('--level', metavar='level', type=str, help='Deprecated. Use --task instead.', default=None, nargs='?')
 parser.add_argument('--seed', metavar='seed', type=str, help='The seed used to run the NEAT algo.', default=2, nargs='?')
-parser.add_argument('--method', metavar='method', type=str, help='The method to use. Only constant, nokill and bestasref are allowed.', default=None, nargs='?')
+parser.add_argument('--method', metavar='method', type=str, help='The method to use. Only constant, nokill, bestasref and tgraceexp are allowed.', default=None, nargs='?')
 parser.add_argument('--gracetime', metavar='gracetime', type=int, help='Parameter for bestasref.', default=None, nargs='?')
+parser.add_argument('--experiment_index_for_log', metavar='experiment_index_for_log', type=int, help='Parameter for log.', default=None, nargs='?')
 parser.add_argument('--resultfilename', metavar='resultfilename', type=str, help='The file in which to write the results', default="resultSuperMario.txt", nargs='?')
 parser.add_argument('--fincrementsize', metavar='fincrementsize', type=int, help='Fitness funcion can only increase in increments of fincrementsize.', default=None, nargs='?')
 parser.add_argument('--task', metavar='task', type=str, help='Which level to run, Eg. 1-1.', nargs='?')
+parser.add_argument('--max_optimization_time', metavar='max_optimization_time', type=float, help='Max runtime for experiment', default=None, nargs='?')
+
 
 args = parser.parse_args()
 
@@ -27,7 +30,7 @@ if (args.mode.upper() == "TRAIN" or args.mode.upper() == "CONT_TRAIN") and args.
 
 
 if args.mode.upper() == "TRAIN":
-    t = t.Train(args.method, args.gen, args.seed, args.resultfilename, args.task, args.gracetime, args.fincrementsize)
+    t = t.Train(args.method, args.gen, args.seed, args.resultfilename, args.task, args.gracetime, args.fincrementsize, experiment_index_for_log=args.experiment_index_for_log, max_optimization_time=args.max_optimization_time)
     t.main(config_file=args.config)
 
 elif args.mode.upper() == "RUN":
